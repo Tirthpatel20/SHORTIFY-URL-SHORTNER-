@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Mail, Lock, LogIn, Eye, EyeOff, Zap, AlertCircle } from "lucide-react";
+import Loading from "@/app/components/loading";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -36,6 +37,7 @@ export default function LoginPage() {
 
       if (!response.ok) {
         setError(data.message || "Login failed");
+        setLoading(false);
         return;
       }
 
@@ -43,13 +45,19 @@ export default function LoginPage() {
       router.refresh();
     } catch {
       setError("Something went wrong. Please try again.");
-    } finally {
       setLoading(false);
     }
   }
 
   return (
     <main className="w-full max-w-md mx-auto py-10">
+      {loading && (
+        <Loading
+          fullScreen
+          text="Signing in..."
+          subtext="Authenticating your credentials and redirecting to dashboard..."
+        />
+      )}
       <div className="glass-neo-card p-8 space-y-6 shadow-[8px_8px_0px_0px_#0f172a] border-3 border-slate-900">
         {/* Header */}
         <div className="text-center space-y-2">

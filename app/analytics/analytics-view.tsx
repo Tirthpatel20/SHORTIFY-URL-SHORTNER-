@@ -12,7 +12,6 @@ import {
   Search,
   ArrowUpDown,
   Radio,
-  QrCode,
   Sparkles,
   Zap,
   TrendingUp,
@@ -21,6 +20,7 @@ import {
   Trash2,
   AlertTriangle,
 } from "lucide-react";
+import Loading from "@/app/components/loading";
 
 type LinkItem = {
   id: number;
@@ -39,7 +39,6 @@ export default function AnalyticsView() {
     "newest",
   );
   const [copiedId, setCopiedId] = useState<number | null>(null);
-  const [activeQrId, setActiveQrId] = useState<number | null>(null);
   const [recentlyUpdatedId, setRecentlyUpdatedId] = useState<number | null>(
     null,
   );
@@ -190,18 +189,11 @@ export default function AnalyticsView() {
 
   if (loading) {
     return (
-      <main className="w-full max-w-5xl mx-auto py-8 space-y-6">
-        <div className="h-10 w-48 bg-slate-300 animate-pulse rounded-lg" />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[1, 2, 3].map((n) => (
-            <div key={n} className="h-28 glass-neo-card animate-pulse" />
-          ))}
-        </div>
-        <div className="space-y-4">
-          {[1, 2, 3].map((n) => (
-            <div key={n} className="h-24 glass-neo-card animate-pulse" />
-          ))}
-        </div>
+      <main className="w-full max-w-5xl mx-auto py-12">
+        <Loading
+          text="Loading Analytics..."
+          subtext="Fetching live telemetry, click stream data, and link statistics"
+        />
       </main>
     );
   }
@@ -427,13 +419,6 @@ export default function AnalyticsView() {
             const isConfirmingDelete = confirmDeleteId === link.id;
             const isDeletingThis = deletingId === link.id;
 
-            const origin =
-              typeof window !== "undefined" ? window.location.origin : "";
-            const fullShortUrl = `${origin}/${link.shortCode}`;
-            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(
-              fullShortUrl,
-            )}`;
-
             return (
               <div
                 key={link.id}
@@ -494,15 +479,7 @@ export default function AnalyticsView() {
                       )}
                     </button>
 
-                    <button
-                      onClick={() =>
-                        setActiveQrId(activeQrId === link.id ? null : link.id)
-                      }
-                      className="neo-btn neo-btn-white p-1.5 text-slate-800"
-                      title="Toggle QR Code"
-                    >
-                      <QrCode className="w-4 h-4" />
-                    </button>
+
 
                     <a
                       href={`/${link.shortCode}`}
@@ -581,31 +558,7 @@ export default function AnalyticsView() {
                   </div>
                 </div>
 
-                {/* QR Code expansion */}
-                {activeQrId === link.id && (
-                  <div className="p-4 bg-white rounded-xl border-2 border-slate-900 flex items-center justify-around gap-4 animate-in fade-in">
-                    <div className="text-left space-y-1">
-                      <p className="font-bold text-sm text-slate-900">
-                        QR Code for /{link.shortCode}
-                      </p>
-                      <p className="text-xs font-medium text-slate-600">
-                        Scan with any mobile camera
-                      </p>
-                      <button
-                        onClick={() => setActiveQrId(null)}
-                        className="text-xs font-bold text-blue-600 underline mt-2 block"
-                      >
-                        Hide QR Code
-                      </button>
-                    </div>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={qrUrl}
-                      alt={`QR code for ${link.shortCode}`}
-                      className="w-28 h-28 border-2 border-slate-900 rounded-lg shadow-[2px_2px_0px_0px_#0f172a]"
-                    />
-                  </div>
-                )}
+
               </div>
             );
           })}
