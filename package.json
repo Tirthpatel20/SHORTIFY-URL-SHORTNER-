@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "worker": "tsx --env-file=.env.local app/worker.ts"
+    "worker": "tsx --env-file=.env.local app/worker.ts",
+    "worker:prod": "tsx app/worker.ts"
   },
   "dependencies": {
     "@upstash/redis": "^1.38.4",
