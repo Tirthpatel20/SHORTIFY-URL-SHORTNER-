@@ -41,8 +41,7 @@ export default function SignupPage() {
         return;
       }
 
-      router.push("/");
-      router.refresh();
+      window.location.href = "/";
     } catch {
       setError("Something went wrong. Please try again.");
       setLoading(false);

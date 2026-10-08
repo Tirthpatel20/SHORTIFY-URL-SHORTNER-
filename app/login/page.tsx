@@ -34,15 +34,14 @@ export default function LoginPage() {
       });
 
       const data = await response.json();
-
+      
       if (!response.ok) {
         setError(data.message || "Login failed");
         setLoading(false);
         return;
       }
 
-      router.push("/");
-      router.refresh();
+      window.location.href = "/";
     } catch {
       setError("Something went wrong. Please try again.");
       setLoading(false);

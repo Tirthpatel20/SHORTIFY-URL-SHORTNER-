@@ -27,7 +27,8 @@ export async function POST(request: Request) {
       );
     }
 
-    await createSession(newUser.id);
+    const { id, email: userEmail, createdAt, updatedAt } = newUser;
+    await createSession(id, { id, email: userEmail, createdAt, updatedAt });
 
     return Response.json(
       {

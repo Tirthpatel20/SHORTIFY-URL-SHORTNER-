@@ -122,7 +122,7 @@ export async function destroySession() {
   await db.delete(sessions).where(eq(sessions.id, sessionId));
 }
 
-export async function createSession(userId: number) {
+export async function createSession(userId: number, userObj?: UserSession) {
   const sessionId = crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
@@ -131,6 +131,16 @@ export async function createSession(userId: number) {
     userId,
     expiresAt,
   });
+
+  if (userObj) {
+    try {
+      await redis.set(`session:${sessionId}`, userObj, {
+        ex: 7 * 24 * 60 * 60,
+      });
+    } catch (err) {
+      console.error("Redis pre-warm session error:", err);
+    }
+  }
 
   const cookieStore = await cookies();
 

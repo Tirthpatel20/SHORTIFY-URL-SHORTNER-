@@ -22,7 +22,8 @@ export async function POST(request: Request) {
   const correctPassword = await bcrypt.compare(password, user[0].passwordHash);
 
   if (correctPassword) {
-    await createSession(user[0].id);
+    const { id, email: userEmail, createdAt, updatedAt } = user[0];
+    await createSession(id, { id, email: userEmail, createdAt, updatedAt });
 
     return Response.json({ message: "Login success" }, { status: 200 });
   }
