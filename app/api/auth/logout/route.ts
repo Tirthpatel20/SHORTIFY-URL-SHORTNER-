@@ -1,28 +1,7 @@
-import { db } from "@/db";
-import { sessions } from "@/db/schema";
-import { getSession } from "@/lib/auth";
-import { eq } from "drizzle-orm";
-import { cookies } from "next/headers";
+import { destroySession } from "@/lib/auth";
 
 async function handleLogout() {
-  const session = await getSession();
-  const cookieStore = await cookies();
-
-  if (!session) {
-    return Response.json(
-      {
-        message: "Logged Out Successfully",
-      },
-      {
-        status: 200,
-      },
-    );
-  }
-
-  cookieStore.delete("session");
-
-  await db.delete(sessions).where(eq(sessions.id, session.id));
-
+  await destroySession();
   return Response.json({ message: "Logged Out Successfully" }, { status: 200 });
 }
 

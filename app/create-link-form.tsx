@@ -9,7 +9,6 @@ import {
   ExternalLink,
   BarChart2,
   Sparkles,
-  QrCode,
   Zap,
   ShieldCheck,
   Globe2,
@@ -23,7 +22,6 @@ export default function CreateLinkForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [showQrModal, setShowQrModal] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -68,13 +66,6 @@ export default function CreateLinkForm() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
-
-  // QR Code URL via free API service
-  const qrCodeImageUrl = shortUrl
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(
-        shortUrl
-      )}`
-    : "";
 
   return (
     <main className="w-full max-w-4xl mx-auto py-6 space-y-12">
@@ -197,15 +188,6 @@ export default function CreateLinkForm() {
                   )}
                 </button>
 
-                <button
-                  onClick={() => setShowQrModal(!showQrModal)}
-                  type="button"
-                  className="neo-btn neo-btn-white p-2 text-slate-900"
-                  title="Show QR Code"
-                >
-                  <QrCode className="w-5 h-5" />
-                </button>
-
                 <a
                   href={shortUrl}
                   target="_blank"
@@ -217,25 +199,6 @@ export default function CreateLinkForm() {
                 </a>
               </div>
             </div>
-
-            {/* QR Modal view */}
-            {showQrModal && (
-              <div className="p-4 bg-white rounded-xl border-3 border-blue-900 flex flex-col items-center gap-3 text-center animate-in fade-in">
-                <p className="text-sm font-bold text-slate-800">Scan to open on mobile</p>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={qrCodeImageUrl}
-                  alt="Short link QR code"
-                  className="w-44 h-44 rounded-lg border-2 border-slate-900 shadow-[3px_3px_0px_0px_#0f172a]"
-                />
-                <button
-                  onClick={() => setShowQrModal(false)}
-                  className="text-xs font-bold text-slate-600 hover:underline"
-                >
-                  Close QR Preview
-                </button>
-              </div>
-            )}
 
             <div className="flex justify-end pt-2">
               <Link

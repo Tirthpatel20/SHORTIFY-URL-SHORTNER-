@@ -1,12 +1,19 @@
 import { db } from "@/db";
 import { sessions, users } from "@/db/schema";
+import { redis } from "@/lib/redis";
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import crypto from "crypto";
 
+export type UserSession = {
+  id: number;
+  email: string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+};
+
 export async function getSession() {
   const cookieStore = await cookies();
-
   const sessionId = cookieStore.get("session")?.value;
 
   if (!sessionId) return null;
@@ -20,6 +27,11 @@ export async function getSession() {
   if (session.length === 0) return null;
 
   if (session[0].expiresAt <= new Date()) {
+    try {
+      await redis.del(`session:${sessionId}`);
+    } catch (err) {
+      console.error("Redis session delete error:", err);
+    }
     await db.delete(sessions).where(eq(sessions.id, sessionId));
     cookieStore.delete("session");
     return null;
@@ -28,22 +40,86 @@ export async function getSession() {
   return session[0];
 }
 
-export async function getCurrentUser() {
-  const session = await getSession();
+export async function getCurrentUser(): Promise<UserSession | null> {
+  const cookieStore = await cookies();
+  const sessionId = cookieStore.get("session")?.value;
 
-  if (!session) return null;
+  if (!sessionId) return null;
 
-  const user = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, session.userId))
+  // 1. Try fetching cached user session from Redis (takes ~15-20ms)
+  try {
+    const cachedUser = await redis.get<UserSession>(`session:${sessionId}`);
+    if (cachedUser) {
+      return cachedUser;
+    }
+  } catch (err) {
+    console.error("Redis get session error, falling back to database:", err);
+  }
+
+  // 2. Cache miss: Fetch session + user in a SINGLE SQL JOIN query
+  const rows = await db
+    .select({
+      id: users.id,
+      email: users.email,
+      createdAt: users.createdAt,
+      updatedAt: users.updatedAt,
+      expiresAt: sessions.expiresAt,
+    })
+    .from(sessions)
+    .innerJoin(users, eq(sessions.userId, users.id))
+    .where(eq(sessions.id, sessionId))
     .limit(1);
 
-  if (user.length === 0) return null;
+  if (rows.length === 0) {
+    return null;
+  }
 
-  const { id, email, createdAt, updatedAt } = user[0];
+  const { expiresAt, ...userData } = rows[0];
 
-  return { id, email, createdAt, updatedAt };
+  // 3. Check expiration
+  if (new Date(expiresAt) <= new Date()) {
+    try {
+      await redis.del(`session:${sessionId}`);
+    } catch (err) {
+      console.error("Redis session delete error:", err);
+    }
+    await db.delete(sessions).where(eq(sessions.id, sessionId));
+    cookieStore.delete("session");
+    return null;
+  }
+
+  // 4. Cache user in Redis until session expires
+  const ttlSeconds = Math.max(
+    0,
+    Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000),
+  );
+
+  if (ttlSeconds > 0) {
+    try {
+      await redis.set(`session:${sessionId}`, userData, { ex: ttlSeconds });
+    } catch (err) {
+      console.error("Redis set session error:", err);
+    }
+  }
+
+  return userData;
+}
+
+export async function destroySession() {
+  const cookieStore = await cookies();
+  const sessionId = cookieStore.get("session")?.value;
+
+  if (!sessionId) return;
+
+  cookieStore.delete("session");
+
+  try {
+    await redis.del(`session:${sessionId}`);
+  } catch (err) {
+    console.error("Redis delete session error:", err);
+  }
+
+  await db.delete(sessions).where(eq(sessions.id, sessionId));
 }
 
 export async function createSession(userId: number) {
@@ -68,3 +144,4 @@ export async function createSession(userId: number) {
 
   return;
 }
+
