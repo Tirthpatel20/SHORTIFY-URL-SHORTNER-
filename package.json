@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@upstash/redis": "^1.38.4",
+    "@vercel/analytics": "^2.0.1",
     "bcryptjs": "^3.0.3",
     "bullmq": "^6.3.8",
     "drizzle-orm": "^0.45.2",
