@@ -29,8 +29,8 @@ export async function getSession() {
   if (session[0].expiresAt <= new Date()) {
     try {
       await redis.del(`session:${sessionId}`);
-    } catch (err) {
-      console.error("Redis session delete error:", err);
+    } catch {
+      // Redis unavailable: ignore
     }
     await db.delete(sessions).where(eq(sessions.id, sessionId));
     cookieStore.delete("session");
@@ -46,17 +46,17 @@ export async function getCurrentUser(): Promise<UserSession | null> {
 
   if (!sessionId) return null;
 
-  // 1. Try fetching cached user session from Redis (takes ~15-20ms)
+  // 1. Try fetching cached user session from Redis
   try {
     const cachedUser = await redis.get<UserSession>(`session:${sessionId}`);
     if (cachedUser) {
       return cachedUser;
     }
-  } catch (err) {
-    console.error("Redis get session error, falling back to database:", err);
+  } catch {
+    // Redis unavailable: ignore and fall back to database
   }
 
-  // 2. Cache miss: Fetch session + user in a SINGLE SQL JOIN query
+  // 2. Database query: Fetch session + user in a single SQL JOIN query
   const rows = await db
     .select({
       id: users.id,
@@ -80,15 +80,15 @@ export async function getCurrentUser(): Promise<UserSession | null> {
   if (new Date(expiresAt) <= new Date()) {
     try {
       await redis.del(`session:${sessionId}`);
-    } catch (err) {
-      console.error("Redis session delete error:", err);
+    } catch {
+      // Redis unavailable: ignore
     }
     await db.delete(sessions).where(eq(sessions.id, sessionId));
     cookieStore.delete("session");
     return null;
   }
 
-  // 4. Cache user in Redis until session expires
+  // 4. Try caching user in Redis until session expires
   const ttlSeconds = Math.max(
     0,
     Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000),
@@ -97,8 +97,8 @@ export async function getCurrentUser(): Promise<UserSession | null> {
   if (ttlSeconds > 0) {
     try {
       await redis.set(`session:${sessionId}`, userData, { ex: ttlSeconds });
-    } catch (err) {
-      console.error("Redis set session error:", err);
+    } catch {
+      // Redis unavailable: ignore
     }
   }
 
@@ -115,8 +115,8 @@ export async function destroySession() {
 
   try {
     await redis.del(`session:${sessionId}`);
-  } catch (err) {
-    console.error("Redis delete session error:", err);
+  } catch {
+    // Redis unavailable: ignore
   }
 
   await db.delete(sessions).where(eq(sessions.id, sessionId));
@@ -137,8 +137,8 @@ export async function createSession(userId: number, userObj?: UserSession) {
       await redis.set(`session:${sessionId}`, userObj, {
         ex: 7 * 24 * 60 * 60,
       });
-    } catch (err) {
-      console.error("Redis pre-warm session error:", err);
+    } catch {
+      // Redis unavailable: ignore
     }
   }
 
@@ -154,4 +154,3 @@ export async function createSession(userId: number, userObj?: UserSession) {
 
   return;
 }
-

@@ -19,6 +19,7 @@ import {
   RefreshCw,
   Trash2,
   AlertTriangle,
+  X,
 } from "lucide-react";
 import Loading from "@/app/components/loading";
 
@@ -43,6 +44,8 @@ export default function AnalyticsView() {
     null,
   );
   const [sseConnected, setSseConnected] = useState(false);
+  const [showLiveOfflineNotice, setShowLiveOfflineNotice] = useState(false);
+  const [lastEventTimestamp, setLastEventTimestamp] = useState<number | null>(null);
 
   // Delete modal state
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
@@ -82,6 +85,16 @@ export default function AnalyticsView() {
       try {
         const data = JSON.parse(event.data);
 
+        if (data.type === "service-status" && data.status === "offline") {
+          setSseConnected(false);
+          setShowLiveOfflineNotice(true);
+          return;
+        }
+        // Record timestamp of the last successful click event
+        if (data.type === "click") {
+          setLastEventTimestamp(Date.now());
+        }
+
         if (data.type !== "click") {
           return;
         }
@@ -116,12 +129,16 @@ export default function AnalyticsView() {
     eventSource.onerror = (error) => {
       console.error("SSE connection error:", error);
       setSseConnected(false);
+      setShowLiveOfflineNotice(true);
     };
 
     return () => {
       eventSource.close();
     };
   }, []);
+
+
+
 
   async function handleCopy(id: number, shortCode: string) {
     const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -230,20 +247,20 @@ export default function AnalyticsView() {
             </h1>
             <span
               className={`neo-badge ${
-                sseConnected ? "neo-badge-green" : "neo-badge-white"
+                sseConnected && !showLiveOfflineNotice ? "neo-badge-green" : "neo-badge-white"
               } text-xs gap-1.5`}
               title={
-                sseConnected
+                sseConnected && !showLiveOfflineNotice
                   ? "Realtime SSE Stream Connected"
                   : "Connecting to stream..."
               }
             >
               <Radio
                 className={`w-3.5 h-3.5 ${
-                  sseConnected ? "text-white animate-pulse" : "text-slate-400"
+                  sseConnected && !showLiveOfflineNotice ? "text-white animate-pulse" : "text-slate-400"
                 }`}
               />
-              {sseConnected ? "LIVE STREAM" : "OFFLINE"}
+              {sseConnected && !showLiveOfflineNotice ? "LIVE STREAM" : "OFFLINE"}
             </span>
           </div>
           <p className="text-sm font-semibold text-slate-600 mt-1">
@@ -563,6 +580,38 @@ export default function AnalyticsView() {
             );
           })}
         </section>
+      )}
+
+      {/* Floating Closable Popup: Live Analytics Offline Notice */}
+      {showLiveOfflineNotice && (
+        <aside
+          aria-live="polite"
+          className="fixed bottom-6 right-6 z-50 max-w-sm w-[calc(100vw-3rem)] p-4 glass-neo-card bg-amber-50 border-3 border-amber-600 text-amber-950 shadow-[6px_6px_0px_0px_#d97706] animate-in fade-in slide-in-from-bottom-4 duration-300"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-amber-200 rounded-lg border border-amber-700 shrink-0 text-amber-900 mt-0.5">
+                <AlertTriangle className="w-5 h-5 text-amber-800" />
+              </div>
+              <div>
+                <h4 className="font-black text-sm text-amber-950">
+                  Live Analytics Currently Offline
+                </h4>
+                <p className="text-xs font-semibold text-amber-800 mt-1 leading-relaxed">
+                  Real-time click streaming is currently not working (Redis service offline). All metrics are being served directly from the database.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowLiveOfflineNotice(false)}
+              className="p-1 rounded-lg hover:bg-amber-200 text-amber-900 hover:text-amber-950 transition-colors shrink-0"
+              title="Close notice"
+              aria-label="Close notice"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </aside>
       )}
     </main>
   );

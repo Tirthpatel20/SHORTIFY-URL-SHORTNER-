@@ -1,8 +1,8 @@
 import { db } from "@/db";
-import { linksTable } from "@/db/schema";
+import { clicksTable, linksTable } from "@/db/schema";
 import { redis } from "@/lib/redis";
-import { eq } from "drizzle-orm";
 import { clicksQueue } from "@/lib/queues";
+import { eq, sql } from "drizzle-orm";
 
 export async function GET(
   request: Request,
@@ -10,18 +10,72 @@ export async function GET(
 ) {
   const { shortCode } = await params;
 
-  const cachedUrl = await redis.get<{
+  // 1. Try fetching from Redis cache
+  let cachedUrl: {
     originalUrl: string;
-    linkId: string;
-    userId: string;
-  }>(`link:${shortCode}`);
+    linkId: number;
+    userId: number;
+  } | null = null;
+
+  try {
+    cachedUrl = await redis.get(`link:${shortCode}`);
+  } catch {
+    // Redis unavailable: proceed directly to database
+  }
 
   if (cachedUrl) {
+    try {
+      await clicksQueue.add(
+        "record-click",
+        {
+          linkId: cachedUrl.linkId,
+          userId: cachedUrl.userId,
+        },
+        {
+          attempts: 3,
+          backoff: {
+            type: "exponential",
+            delay: 1000,
+          },
+          removeOnComplete: true,
+        },
+      );
+    } catch {
+      // Redis queue unavailable: record click directly in database
+      try {
+        await db.insert(clicksTable).values({ linkId: cachedUrl.linkId });
+        await db
+          .update(linksTable)
+          .set({ clickCount: sql`${linksTable.clickCount} + 1` })
+          .where(eq(linksTable.id, cachedUrl.linkId));
+      } catch (dbErr) {
+        console.error("Direct DB click write error:", dbErr);
+      }
+    }
+
+    return Response.redirect(cachedUrl.originalUrl, 302);
+  }
+
+  // 2. Fetch link from database
+  const link = await db
+    .select()
+    .from(linksTable)
+    .where(eq(linksTable.shortCode, shortCode))
+    .limit(1);
+
+  if (link.length === 0) {
+    return Response.json({ error: "Link not found" }, { status: 404 });
+  }
+
+  const { id: linkId, userId, originalUrl } = link[0];
+
+  // 3. Record click (BullMQ queue with direct DB write fallback)
+  try {
     await clicksQueue.add(
       "record-click",
       {
-        linkId: cachedUrl.linkId,
-        userId: cachedUrl.userId,
+        linkId,
+        userId,
       },
       {
         attempts: 3,
@@ -32,47 +86,35 @@ export async function GET(
         removeOnComplete: true,
       },
     );
-    return Response.redirect(cachedUrl.originalUrl, 302);
+  } catch {
+    // Redis queue unavailable: record click directly in database
+    try {
+      await db.insert(clicksTable).values({ linkId });
+      await db
+        .update(linksTable)
+        .set({ clickCount: sql`${linksTable.clickCount} + 1` })
+        .where(eq(linksTable.id, linkId));
+    } catch (dbErr) {
+      console.error("Direct DB click write error:", dbErr);
+    }
   }
 
-  const link = await db
-    .select()
-    .from(linksTable)
-    .where(eq(linksTable.shortCode, shortCode))
-    .limit(1);
-
-  if (link.length === 0)
-    return Response.json({ error: "Link not found" }, { status: 404 });
-
-  await clicksQueue.add(
-    "record-click",
-    {
-      linkId: link[0].id,
-      userId: link[0].userId,
-    },
-    {
-      attempts: 3,
-      backoff: {
-        type: "exponential",
-        delay: 1000,
+  // 4. Try caching link in Redis
+  try {
+    await redis.set(
+      `link:${shortCode}`,
+      {
+        originalUrl,
+        linkId,
+        userId,
       },
-      removeOnComplete: true,
-    },
-  );
-
-  const { originalUrl } = link[0];
-
-  await redis.set(
-    `link:${shortCode}`,
-    {
-      originalUrl,
-      linkId: link[0].id,
-      userId: link[0].userId,
-    },
-    {
-      ex: 60 * 60,
-    },
-  );
+      {
+        ex: 60 * 60,
+      },
+    );
+  } catch {
+    // Redis unavailable: ignore
+  }
 
   return Response.redirect(originalUrl, 302);
 }

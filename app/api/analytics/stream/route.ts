@@ -18,6 +18,15 @@ export async function GET(request: Request) {
     async start(controller) {
       subscriber.on("error", (error) => {
         console.error("[SSE Redis] Error:", error);
+        try {
+          controller.enqueue(
+            `data: ${JSON.stringify({
+              type: "service-status",
+              status: "offline",
+              message: "Live analytics currently not working",
+            })}\n\n`,
+          );
+        } catch {}
       });
 
       subscriber.on("message", (receivedChannel, message) => {
@@ -28,11 +37,22 @@ export async function GET(request: Request) {
         controller.enqueue(`data: ${message}\n\n`);
       });
 
-      await subscriber.subscribe(channel);
-
-      console.log(`[SSE] Subscribed to ${channel}`);
-
-      controller.enqueue(": connected\n\n");
+      try {
+        await subscriber.subscribe(channel);
+        console.log(`[SSE] Subscribed to ${channel}`);
+        controller.enqueue(": connected\n\n");
+      } catch (error) {
+        console.error("[SSE] Redis subscribe error:", error);
+        try {
+          controller.enqueue(
+            `data: ${JSON.stringify({
+              type: "service-status",
+              status: "offline",
+              message: "Live analytics currently not working",
+            })}\n\n`,
+          );
+        } catch {}
+      }
 
       request.signal.addEventListener("abort", async () => {
         console.log(`[SSE] Client disconnected: ${channel}`);

@@ -5,8 +5,6 @@ import { eq, sql } from "drizzle-orm";
 import { workerRedis } from "@/lib/workerRedis";
 import { pubSubRedis } from "@/lib/pubSubRedis";
 
-
-
 const worker = new Worker(
   "clicks",
   async (job) => {
@@ -38,18 +36,22 @@ const worker = new Worker(
       return updatedLink;
     });
 
-    await pubSubRedis.publish(
-      `analytics:user:${userId}`,
-      JSON.stringify({
-        type: "click",
-        linkId,
-        clickCount: result.clickCount,
-      }),
-    );
+    try {
+      await pubSubRedis.publish(
+        `analytics:user:${userId}`,
+        JSON.stringify({
+          type: "click",
+          linkId,
+          clickCount: result.clickCount,
+        }),
+      );
 
-    console.log("Published analytics event:", {
-      channel: `analytics:user:${userId}`,
-    });
+      console.log("Published analytics event:", {
+        channel: `analytics:user:${userId}`,
+      });
+    } catch (pubErr) {
+      console.warn("PubSub publish error (ignored):", pubErr);
+    }
   },
   {
     connection: workerRedis,

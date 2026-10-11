@@ -7,7 +7,7 @@ import { eq, and } from "drizzle-orm";
 
 export async function DELETE(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await getCurrentUser();
 
@@ -32,16 +32,20 @@ export async function DELETE(
   if (existingLinks.length === 0) {
     return NextResponse.json(
       { error: "Link not found or unauthorized" },
-      { status: 404 }
+      { status: 404 },
     );
   }
 
   const link = existingLinks[0];
 
   try {
-    // 1. Delete cached link from Redis
+    // 1. Delete cached link from Redis / Memory cache safely
     if (link.shortCode) {
-      await redis.del(`link:${link.shortCode}`);
+      try {
+        await redis.del(`link:${link.shortCode}`);
+      } catch (cacheErr) {
+        console.warn("[Delete Link] Cache deletion warning (ignored):", cacheErr);
+      }
     }
 
     // 2. Delete click records from DB
@@ -53,14 +57,14 @@ export async function DELETE(
       .where(and(eq(linksTable.id, linkId), eq(linksTable.userId, user.id)));
 
     return NextResponse.json(
-      { message: "Link successfully deleted from database and Redis cache" },
-      { status: 200 }
+      { message: "Link successfully deleted" },
+      { status: 200 },
     );
   } catch (error) {
     console.error("Failed to delete link:", error);
     return NextResponse.json(
-        { error: "Failed to delete link" },
-      { status: 500 }
+      { error: "Failed to delete link" },
+      { status: 500 },
     );
   }
 }
